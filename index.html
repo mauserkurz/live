@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Жизнь Конвея</title>
+	<meta charset="utf-8">
+	<style>
+		.events-none {
+			pointer-events: none;
+			background-color: rgba(0,0,0, .3);
+		}
+		.events-none-table {
+			pointer-events: none;
+		}
+		input {
+			display: none;
+		}
+		table {
+			border-collapse: collapse;
+		}
+		td {
+			width: 16px;
+			height: 16px;
+			border: 1px solid #64707D;
+			background-color: #000;
+		}
+		.live {
+			background-color: #0c0;
+		}
+	</style>
+</head>
+<body>
+	<div id="grid"></div>
+	<button id="start">start</button>
+	<button id="stop">stop</button>
+	<button id="reset">reset</button>
+	<button id="random">random</button>
+	<button id="middle">middle</button>
+	<script type="text/javascript">
+		var grid = document.getElementById('grid'),
+			start = document.getElementById('start'),
+			stop = document.getElementById('stop'),
+			random = document.getElementById('random'),
+			reset = document.getElementById('reset'),
+			middle = document.getElementById('middle'),
+			moving = false,
+			content,
+			inputList,
+			liveStep,
+			chance;
+		function nodeElem(tag, checkbox) {
+			var nodeElem = document.createElement(tag),
+				checkbox = checkbox || false;
+			if (checkbox) {
+				nodeElem.setAttribute('data-value', '0');
+				nodeElem.setAttribute('data-live', 'false');
+				nodeElem.setAttribute('type', 'checkbox');
+			}
+			return nodeElem;
+		}
+		/* генератор пустой сетки */
+		function Grid (side) {
+			var table, row, cell, check;
+			this.width = side;
+			this.height = side;
+			table = nodeElem('table');
+			row = nodeElem('tr');
+			cell = nodeElem('td');
+			check = nodeElem('input', 'checkbox');
+			cell.appendChild(check);
+			for (var k = 0; k < this.height; k++) { 
+				var newRow = row.cloneNode(true);
+				for (var i = 0; i < this.width; i++) {
+					var newCell = cell.cloneNode(true);
+					newRow.appendChild(newCell);
+				}
+				table.appendChild(newRow);
+			}
+			grid.appendChild(table);
+			this.content = grid;
+		}
+		Grid.prototype.inputList = function () {
+			var arr = []
+				inputs = this.content.getElementsByTagName('input');
+			for (var i = inputs.length - 1; i >= 0; i--) {
+				arr[i] = inputs[i];
+			}
+			return arr;
+		}
+		content = new Grid (50);
+		inputList = content.inputList();
+		/* генератор отметок сетки */
+		function randomGenerator () {
+			var parent;
+			for (var i = 0; i < inputList.length; i++) {
+				chance = Math.round(Math.random() * 10);
+				if (chance > 8) {
+					inputList[i].checked = true;
+					inputList[i].setAttribute('data-live', 'true');
+					parent = inputList[i].parentNode;
+					if (!parent.classList.contains('live')) {
+						parent.classList.add('live');;
+					}
+				}
+			}
+		}
+		/* работа чекбоксов по клику */
+		function listenInputs() {
+			for (var i = 0; i < inputList.length; i++) {
+				inputList[i].addEventListener('change', function() {
+					if (this.checked === true) {
+						this.setAttribute('data-live', 'true');
+						this.parentNode.classList.add('live');
+					}
+					else {
+						this.setAttribute('data-live', 'false');
+						this.parentNode.classList.remove('live');
+					}
+				});
+				inputList[i].parentNode.addEventListener('click', function (event) {
+					event.preventDefault();
+					var e = new Event('change'),
+						child = this.firstChild;
+					if (child.checked === true) {
+						child.checked = false;
+					}
+					else {
+						child.checked = true;
+					}
+					child.dispatchEvent(e);
+				});
+			}
+		}
+		listenInputs();
+		/* счетчик живых соседей */
+		function countBall (input, index, width, height, list) {
+			var index = index,
+				input = input,
+				list = list,
+				width = width,
+				height = height;
+			function findNeighbors () {
+				var total = 0,
+					neighbors = [],
+					diameter = 3,
+					startIndex = index - width - 2;
+				for (var i = 0; i < diameter; i++) {
+					for (var k = 0; k < diameter; k++) {
+						startIndex++;
+						if (startIndex !== index) {
+							neighbors.push(list[startIndex]);
+						}
+					}
+					startIndex += width - diameter;
+				}
+				/* top-left */
+				if (index === 0) {
+					neighbors[0] = list[height * width - 1];
+					neighbors[1] = list[index + (width * (height - 1))];
+					neighbors[2] = list[index + (width * (height - 1) + 1)];
+					neighbors[3] = list[index + width - 1];
+					neighbors[5] = list[index + width * 2 - 1];
+				}
+				/* top-right */
+				else if (index === width - 1) {
+					neighbors[0] = list[index + (width * (height - 1)) - 1];
+					neighbors[1] = list[index + (width * (height - 1))];
+					neighbors[2] = list[width * (height - 1)];
+					neighbors[4] = list[index - width + 1];
+					neighbors[7] = list[index + 1];
+				}
+				/* bottom-right */
+				else if (index === width * height - 1) {
+					neighbors[2] = list[index - width * 2 + 1];
+					neighbors[4] = list[index - width + 1];
+					neighbors[5] = list[width - 2];
+					neighbors[6] = list[width - 1];
+					neighbors[7] = list[0];
+				}
+				/* bottom-left */
+				else if (index === width * (height - 1)) {
+					neighbors[0] = list[index - 1];
+					neighbors[3] = list[index + width - 1];
+					neighbors[5] = list[width - 1];
+					neighbors[6] = list[0];
+					neighbors[7] = list[1];
+				}
+				/* top */
+				else if (index < width) {
+					neighbors[0] = list[index + (width * (height - 1)) - 1];
+					neighbors[1] = list[index + (width * (height - 1))];
+					neighbors[2] = list[index + (width * (height - 1)) + 1];
+				}
+				/* right */
+				else if ((index + 1) % width === 0) {
+					neighbors[2] = list[index - width * 2 + 1];
+					neighbors[4] = list[index - width + 1];
+					neighbors[7] = list[index + 1];
+				}
+				/* bottom */
+				else if (index >= width * (height - 1)) {
+					neighbors[5] = list[index % width - 1];
+					neighbors[6] = list[index % width];
+					neighbors[7] = list[index % width + 1];
+				}
+				/* left */
+				else if (index % width === 0) {
+					neighbors[0] = list[index - 1];
+					neighbors[3] = list[index + width - 1];
+					neighbors[5] = list[index + width * 2 - 1];
+				}
+				neighbors.forEach(function(elem) {
+					if (elem.dataset.live === 'true') {
+						total++;
+					}
+				});
+				return total;
+			}
+			input.dataset.value = findNeighbors();
+		}
+		/* определение жизни клетки */
+		function setLive (input, index) {
+			if (input.dataset.live === 'true' && (input.dataset.value !== '2' && input.dataset.value !== '3')) {
+				var click = new MouseEvent('click', {
+					'view': window,
+					'bubbles': false,
+					'cancelable': true
+				});
+				input.dispatchEvent(click);
+			}
+			else if (input.dataset.live === 'false' && input.dataset.value === '3') {
+				var click = new MouseEvent('click', {
+					'view': window,
+					'bubbles': false,
+					'cancelable': true
+				});
+				input.dispatchEvent(click);
+			}
+		}
+		/* обработчик одного хода */
+		function nextStep () {
+			inputList.forEach(function(elem, i, arr) {
+				countBall (elem, i, content.width, content.height, arr);
+			});
+			inputList.forEach(function(elem, i) {
+				setLive (elem, i);
+			});
+		}
+		/* кнопки */
+		stop.classList.toggle('events-none');
+		function toggleClasses () {
+			grid.classList.toggle('events-none-table');
+			start.classList.toggle('events-none');
+			stop.classList.toggle('events-none');
+			reset.classList.toggle('events-none');
+			random.classList.toggle('events-none');
+			middle.classList.toggle('events-none');
+		}
+		/* запуск ходов */
+		function startGeneration (event) {
+			event.preventDefault();
+			liveStep = setInterval(nextStep, 300);
+			toggleClasses ();
+		}
+		start.addEventListener('click', startGeneration);
+		/* осановка ходов */
+		function stopGeneration(event) {
+			event.preventDefault();
+			clearInterval(liveStep);
+			toggleClasses ();
+		}
+		stop.addEventListener('click', stopGeneration);
+		/* удаление всех живых клеток*/
+		function resetGeneration(event) {
+			event.preventDefault();
+			inputList.forEach(function(elem) {
+				elem.checked = false;
+				elem.dataset.live = false;
+				elem.parentNode.classList.remove('live');
+			});
+		}
+		reset.addEventListener('click', resetGeneration);
+		/* случайное определение живых клеток */
+		function randomGeneration(event) {
+			event.preventDefault();
+			inputList.forEach(function(elem) {
+				elem.checked = false;
+				elem.dataset.live = false;
+				elem.parentNode.classList.remove('live');
+			});
+			randomGenerator();
+		}
+		random.addEventListener('click', randomGeneration);
+		/* нахождение середины доски */
+		function findMiddle(event) {
+			var num, parent;
+			event.preventDefault();
+			num = content.width * (Math.round(content.height / 2) - 1) + Math.round(content.width / 2) - 1;
+			inputList[num].checked = true;
+			inputList[num].dataset.live = true;
+			parent = inputList[num].parentNode;
+			if (!parent.classList.contains('live')) {
+				parent.classList.add('live');;
+			}
+		}
+		middle.addEventListener('click', findMiddle);
+		/* события с клавиатуры */
+		addEventListener('keydown', function(event) {
+			if (!moving) {
+				/* F - Enter */
+				if (event.keyCode === 70 || event.keyCode === 13) {
+					startGeneration(event);
+					moving = true;
+				}
+				/* X - Delete */
+				else if (event.keyCode === 88 || event.keyCode === 46) {
+					resetGeneration(event);
+				}
+				/* R */
+				else if (event.keyCode === 82) {
+					randomGeneration(event);
+				}
+				/* M */
+				else if (event.keyCode === 77) {
+					findMiddle(event);
+				}
+			}
+			else {
+				/* E - Space */
+				if (event.keyCode === 69 || event.keyCode === 32) {
+					stopGeneration(event);
+					moving = false;
+				}
+			}
+		});
+	</script>
+</body>
+</html>
